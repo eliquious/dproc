@@ -11,8 +11,8 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
-	engine := dproc.NewEngine(ctx, dproc.ProcessorList{
+	ctx, cancel := context.WithCancel(context.Background())
+	engine := dproc.NewEngine(ctx, cancel, dproc.ProcessorList{
 		NewRandomProc(ctx, "RandomProc", dproc.ProcessorList{
 			NewRandomLogger(ctx, "Logger"),
 		}),
@@ -42,6 +42,10 @@ func NewRandomProc(ctx context.Context, name string, ps dproc.ProcessorList) dpr
 // TypeRandom is the message type for random numbers
 const TypeRandom = dproc.MessageType("Random")
 
+type RandomMessage struct {
+	Value float64
+}
+
 type randomProc struct {
 	ctx      context.Context
 	name     string
@@ -67,9 +71,7 @@ func (r *randomProc) start() {
 					Timestamp: time.Now(),
 					Type:      TypeRandom,
 					Forward:   false,
-					Values: map[string]interface{}{
-						"random": rand.Float64(),
-					},
+					Value:     RandomMessage{rand.Float64()},
 				})
 			}
 		case msg := <-r.inbox:
@@ -133,8 +135,10 @@ func (r *randomLoggerProc) start() {
 				r.state = dproc.StateKilled
 				ticker.Stop()
 			case TypeRandom:
-				sum += float64(msg.Values["random"].(float64))
-				count++
+				if v, ok := msg.Value.(RandomMessage); ok {
+					sum += v.Value
+					count++
+				}
 			}
 		case <-r.ctx.Done():
 			r.state = dproc.StateKilled

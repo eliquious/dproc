@@ -20,7 +20,7 @@ type Message struct {
 	Timestamp time.Time
 	Type      MessageType
 	Forward   bool
-	Values    map[string]interface{}
+	Value     interface{}
 }
 
 // State manages the processor state
