@@ -2,6 +2,8 @@ package dproc
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"time"
 )
 
@@ -19,39 +21,143 @@ type Message struct {
 	Timestamp time.Time
 	Type      MessageType
 	Forward   bool
-	Values    map[string]interface{}
+	Value     interface{}
 }
 
 // State manages the processor state
-type State int
+type State string
 
 // States
 const (
-	StateRunning State = iota
-	StateWaiting
-	StateKilled
+	StateRunning State = "RUNNING"
+	StateWaiting       = "WAITING"
+	StateKilled        = "KILLED"
 )
 
-// Processor processes messages.
-type Processor interface {
-	Name() string
-	// State() State
-	Process(Message)
+// HandleFunc processes messages
+type HandleFunc func(context.Context, Process, Message)
+
+// Handler is a simple interface for anything with a HandleFunc
+type Handler interface {
+	Handle(ctx context.Context, proc Process, msg Message)
 }
 
-// ProcessorList is a list type for Processors
-type ProcessorList []Processor
+// Process is the base data processing element.
+type Process interface {
+	Name() string
+	SetState(State)
+	Start(*sync.WaitGroup)
+	Send(Message)
+	Inbox() <-chan Message
+	Children() ProcessList
+}
+
+// ProcessList is a list type for Process
+type ProcessList []Process
 
 // Dispatch dispatches a message to a list of processes
-func (p ProcessorList) Dispatch(m Message) {
+func (p ProcessList) Dispatch(m Message) {
 	for i := 0; i < len(p); i++ {
-		p[i].Process(m)
+		p[i].Send(m)
 	}
+}
+
+// NewDefaultProcess creates a new DefaultProcess with the given properties.
+func NewDefaultProcess(ctx context.Context, name string, h Handler, ps ProcessList) Process {
+	p := &DefaultProcess{
+		ctx:      ctx,
+		name:     name,
+		handler:  h,
+		state:    StateWaiting,
+		stateCh:  make(chan State, 2),
+		inbox:    make(chan Message, 2048),
+		children: ps,
+	}
+	// go p.Start()
+	return p
+}
+
+// DefaultProcess is the default process
+type DefaultProcess struct {
+	handler  Handler
+	ctx      context.Context
+	state    State
+	inbox    chan Message
+	stateCh  chan State
+	children ProcessList
+	name     string
+}
+
+// Start runs the process
+func (p *DefaultProcess) Start(wg *sync.WaitGroup) {
+	wg.Add(1)
+	for _, c := range p.children {
+		c.Start(wg)
+	}
+
+	go func() {
+		defer wg.Done()
+		for p.state != StateKilled {
+
+			select {
+			case <-p.ctx.Done():
+				p.SetState(StateKilled)
+			case s := <-p.stateCh:
+				p.state = s
+			case msg := <-p.inbox:
+				switch msg.Type {
+				case MessageTypeStart:
+					p.state = StateRunning
+					p.Children().Dispatch(msg)
+				case MessageTypeStop:
+					p.state = StateKilled
+					p.handler.Handle(p.ctx, p, msg)
+					p.Children().Dispatch(msg)
+				}
+
+				// Process message
+				if p.state == StateRunning {
+					p.handler.Handle(p.ctx, p, msg)
+				}
+
+				// Forward message
+				if msg.Forward && msg.Type != MessageTypeStart {
+					p.Children().Dispatch(msg)
+				}
+			}
+		}
+		p.Children().Dispatch(Message{Timestamp: time.Now(), Type: MessageTypeStop, Forward: true})
+	}()
+}
+
+// SetState returns the process state
+func (p *DefaultProcess) SetState(s State) {
+	p.stateCh <- s
+}
+
+// Name returns the process name
+func (p *DefaultProcess) Name() string {
+	return p.name
+}
+
+// Send enqueues incoming messages and updates account information
+func (p *DefaultProcess) Send(msg Message) {
+	p.inbox <- msg
+}
+
+// Inbox returns the process queue
+func (p *DefaultProcess) Inbox() <-chan Message {
+	return p.inbox
+}
+
+// Children returns the process children
+func (p *DefaultProcess) Children() ProcessList {
+	return p.children
 }
 
 // Engine manages the pipeline
 type Engine interface {
-	Start()
+	Start(*sync.WaitGroup)
 	Stop()
 }
 
@@ -77,6 +183,7 @@ type contextKey string
 
 var serviceKey = contextKey("svc")
 var nameKey = contextKey("name")
+var waitGroupKey = contextKey("waitgroup")
 
 // SendTo allows for sending messages to services
 func SendTo(ctx context.Context, svc string, msg Message) {
@@ -116,19 +223,46 @@ func Name(ctx context.Context) string {
 	return ""
 }
 
+// WithWaitGroup adds a sync.WaitGroup to a context.Context.
+func WithWaitGroup(ctx context.Context, wg *sync.WaitGroup) context.Context {
+	return context.WithValue(ctx, waitGroupKey, wg)
+}
+
+// Done decrements a sync.WaitGroup from a context.Context.
+func Done(ctx context.Context) {
+	if v := ctx.Value(waitGroupKey); v != nil {
+		if wg, ok := v.(*sync.WaitGroup); ok {
+			fmt.Println("Done 1")
+			wg.Done()
+		}
+	}
+}
+
+// Add increments a sync.WaitGroup from a context.Context.
+func Add(ctx context.Context) {
+	if v := ctx.Value(waitGroupKey); v != nil {
+		if wg, ok := v.(*sync.WaitGroup); ok {
+			fmt.Println("Add 1")
+			wg.Add(1)
+		}
+	}
+}
+
 // NewEngine creates a new engine
-func NewEngine(ctx context.Context, ps ProcessorList) Engine {
-	ctx, cancel := context.WithCancel(ctx)
+func NewEngine(ctx context.Context, cancel context.CancelFunc, ps ProcessList) Engine {
 	return &engine{ctx, cancel, ps}
 }
 
 type engine struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
-	children ProcessorList
+	children ProcessList
 }
 
-func (e *engine) Start() {
+func (e *engine) Start(wg *sync.WaitGroup) {
+	for _, p := range e.children {
+		p.Start(wg)
+	}
 	e.children.Dispatch(Message{Timestamp: time.Now(), Type: MessageTypeStart, Forward: true})
 }
 
