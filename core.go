@@ -183,7 +183,6 @@ type contextKey string
 
 var serviceKey = contextKey("svc")
 var nameKey = contextKey("name")
-var waitGroupKey = contextKey("waitgroup")
 
 // SendTo allows for sending messages to services
 func SendTo(ctx context.Context, svc string, msg Message) {
@@ -205,47 +204,6 @@ func WithService(ctx context.Context, svc Service) context.Context {
 		return ctx
 	}
 	return context.WithValue(ctx, serviceKey, ServiceList{svc})
-}
-
-// WithName adds a name to a context.Context.
-func WithName(ctx context.Context, name string) context.Context {
-	return context.WithValue(ctx, nameKey, name)
-}
-
-// Name gets a name from a context.Context.
-func Name(ctx context.Context) string {
-	if v := ctx.Value(nameKey); v != nil {
-		if name, ok := v.(string); ok {
-			return name
-		}
-		return ""
-	}
-	return ""
-}
-
-// WithWaitGroup adds a sync.WaitGroup to a context.Context.
-func WithWaitGroup(ctx context.Context, wg *sync.WaitGroup) context.Context {
-	return context.WithValue(ctx, waitGroupKey, wg)
-}
-
-// Done decrements a sync.WaitGroup from a context.Context.
-func Done(ctx context.Context) {
-	if v := ctx.Value(waitGroupKey); v != nil {
-		if wg, ok := v.(*sync.WaitGroup); ok {
-			fmt.Println("Done 1")
-			wg.Done()
-		}
-	}
-}
-
-// Add increments a sync.WaitGroup from a context.Context.
-func Add(ctx context.Context) {
-	if v := ctx.Value(waitGroupKey); v != nil {
-		if wg, ok := v.(*sync.WaitGroup); ok {
-			fmt.Println("Add 1")
-			wg.Add(1)
-		}
-	}
 }
 
 // NewEngine creates a new engine
