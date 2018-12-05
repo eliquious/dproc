@@ -4,145 +4,100 @@ import (
 	"context"
 	"fmt"
 	"github.com/eliquious/dproc"
+	"log"
 	"math/rand"
 	"os"
-	"os/signal"
+	"sync"
+	// "os/signal"
 	"time"
 )
 
 func main() {
+	log.SetOutput(os.Stdout)
 	ctx, cancel := context.WithCancel(context.Background())
-	engine := dproc.NewEngine(ctx, cancel, dproc.ProcessorList{
-		NewRandomProc(ctx, "RandomProc", dproc.ProcessorList{
-			NewRandomLogger(ctx, "Logger"),
+
+	var wg sync.WaitGroup
+	engine := dproc.NewEngine(ctx, cancel, dproc.ProcessList{
+		dproc.NewDefaultProcess(ctx, "Random Numbers", &RandomGenerator{time.Second * 5}, dproc.ProcessList{
+			dproc.NewDefaultProcess(ctx, "Random Logger", &RandomLogger{Ticker: time.NewTicker(time.Second)}, dproc.ProcessList{}),
 		}),
 	})
-	engine.Start()
-	// time.Sleep(time.Second * 5)
+	start := time.Now()
+	engine.Start(&wg)
 
-	// Set up channel on which to send signal notifications.
-	// We must use a buffered channel or risk missing the signal
-	// if we're not ready to receive when the signal is sent.
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-
-	// Block until a signal is received.
-	<-c
+	wg.Wait()
+	fmt.Println("Elapsed: ", time.Since(start))
 	fmt.Println("\nExiting...")
-	engine.Stop()
-}
-
-// NewRandomProc creates a new dproc.Processor that emits random numbers
-func NewRandomProc(ctx context.Context, name string, ps dproc.ProcessorList) dproc.Processor {
-	proc := &randomProc{ctx, name, ps, dproc.StateWaiting, make(chan dproc.Message, 1)}
-	go proc.start()
-	return proc
 }
 
 // TypeRandom is the message type for random numbers
 const TypeRandom = dproc.MessageType("Random")
 
+// RandomMessage encapulates the random number for transmission.
 type RandomMessage struct {
 	Value float64
 }
 
-type randomProc struct {
-	ctx      context.Context
-	name     string
-	children dproc.ProcessorList
-	state    dproc.State
-	inbox    chan dproc.Message
+// RandomGenerator simply generates random numbers
+type RandomGenerator struct {
+	Duration time.Duration
 }
 
-func (r *randomProc) Name() string {
-	return r.name
-}
+// Handle sends prime messages to all the child processes.
+func (p *RandomGenerator) Handle(ctx context.Context, proc dproc.Process, msg dproc.Message) {
+	switch msg.Type {
+	default:
+		fmt.Println("Unknown message type: ", msg.Type)
+	case dproc.MessageTypeStart:
+		log.Printf("[%s] - Starting...", proc.Name())
 
-func (r *randomProc) Process(msg dproc.Message) {
-	r.inbox <- msg
-}
-
-func (r *randomProc) start() {
-	for {
-		select {
-		case <-time.After(time.Millisecond):
-			if r.state == dproc.StateRunning {
-				r.children.Dispatch(dproc.Message{
-					Timestamp: time.Now(),
-					Type:      TypeRandom,
+		timer := time.NewTimer(p.Duration)
+		for {
+			select {
+			default:
+				proc.Children().Dispatch(dproc.Message{
 					Forward:   false,
+					Type:      TypeRandom,
+					Timestamp: time.Now().UTC(),
 					Value:     RandomMessage{rand.Float64()},
 				})
+			case <-ctx.Done():
+				// fallthrough
+			case <-timer.C:
+				proc.SetState(dproc.StateKilled)
+				log.Printf("[%s] - Exiting...", proc.Name())
+				return
 			}
-		case msg := <-r.inbox:
-			// fmt.Printf("%s - [%s] %s %+v\n", time.Now().UTC().Format(time.RFC3339), r.name, msg.Type, msg.Values)
-
-			switch msg.Type {
-			case dproc.MessageTypeStart:
-				r.state = dproc.StateRunning
-			case dproc.MessageTypeStop:
-				r.state = dproc.StateKilled
-			}
-			if msg.Forward {
-				r.children.Dispatch(msg)
-			}
-		case <-r.ctx.Done():
-			return
 		}
 	}
 }
 
-// NewRandomLogger creates a new dproc.Processor that logs random numbers
-func NewRandomLogger(ctx context.Context, name string) dproc.Processor {
-	proc := &randomLoggerProc{ctx, name, dproc.StateWaiting, make(chan dproc.Message, 1)}
-	go proc.start()
-	return proc
+// RandomLogger simply logs random numbers per second
+type RandomLogger struct {
+	Ticker *time.Ticker
+
+	count int
 }
 
-type randomLoggerProc struct {
-	ctx   context.Context
-	name  string
-	state dproc.State
-	inbox chan dproc.Message
-}
+// Handle sends prime messages to all the child processes.
+func (p *RandomLogger) Handle(ctx context.Context, proc dproc.Process, msg dproc.Message) {
+	switch msg.Type {
+	default:
+		fmt.Println("Unknown message type: ", msg.Type)
+	case dproc.MessageTypeStart:
+		log.Printf("[%s] - Starting...", proc.Name())
+	case dproc.MessageTypeStop:
+		p.Ticker.Stop()
+		log.Printf("[%s] - Exiting...", proc.Name())
+	case TypeRandom:
+		// log.Printf("[%s] - %.5f", proc.Name(), msg.(RandomMessage).Value)
 
-func (r *randomLoggerProc) Name() string {
-	return r.name
-}
-
-func (r *randomLoggerProc) Process(msg dproc.Message) {
-	r.inbox <- msg
-}
-
-func (r *randomLoggerProc) start() {
-	// var state dproc.State
-	// state = dproc.StateWaiting
-	var sum float64
-	var count int
-	ticker := time.NewTicker(time.Second)
-	for {
 		select {
-		case <-ticker.C:
-			fmt.Printf("%s\t%s\t%.8f\t%d\n", time.Now().UTC().Format(time.RFC3339), TypeRandom, sum/float64(count), count)
-			sum = 0
-			count = 0
-		case msg := <-r.inbox:
-			// fmt.Printf("%s - [%s] %s %+v\n", time.Now().UTC().Format(time.RFC3339), r.name, msg.Type, msg.Values)
-			switch msg.Type {
-			case dproc.MessageTypeStart:
-				r.state = dproc.StateRunning
-			case dproc.MessageTypeStop:
-				r.state = dproc.StateKilled
-				ticker.Stop()
-			case TypeRandom:
-				if v, ok := msg.Value.(RandomMessage); ok {
-					sum += v.Value
-					count++
-				}
-			}
-		case <-r.ctx.Done():
-			r.state = dproc.StateKilled
-			return
+		case <-p.Ticker.C:
+			log.Printf("[%s] - %d/s", proc.Name(), p.count)
+			p.count = 0
+		default:
+			p.count++
 		}
 	}
 }
