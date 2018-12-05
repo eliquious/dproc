@@ -2,7 +2,6 @@ package dproc
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 )
