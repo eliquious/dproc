@@ -1,12 +1,19 @@
 # hugo server --themesDir ...
 
-baseURL = "https://example.com"
+baseURL = ""
 title = "Hugo Book"
 theme = "book"
 themesDir = "../themes"
+languagecode = "en"
+defaultcontentlanguage = "en"
 
 # Book configuration
 disablePathToLower = true
+
+relativeURLs = true
+
+# [permalinks]
+#   post = "../../"
 
 [params]
   # show or hide table of contents for page
