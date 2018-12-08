@@ -16,7 +16,7 @@ relativeURLs = true
 
 [params]
   
-  menusvg = "/dproc/articles/svg/menu.svg"
+  menusvg = "/svg/menu.svg"
 
   # show or hide table of contents for page
   BookShowToC = true
