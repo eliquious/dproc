@@ -1,0 +1,6 @@
+[submodule "site/themes/book"]
+	path = site/themes/book
+	url = https://github.com/eliquious/hugo-book
+[submodule "site/themes/hugo-coder"]
+	path = site/themes/hugo-coder
+	url = https://github.com/eliquious/hugo-coder.git
