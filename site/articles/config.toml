@@ -1,6 +1,6 @@
 # hugo server --themesDir ...
 
-baseURL = "https://eliquious.github.io/dproc/articles"
+baseURL = ""
 title = "Hugo Book"
 theme = "book"
 themesDir = "../themes"
