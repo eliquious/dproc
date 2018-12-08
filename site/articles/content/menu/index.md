@@ -2,7 +2,7 @@
 headless: true
 ---
 
-- [**Introduction**](../)
+- [**Introduction**](/docs/intro)
 - [Examples](/docs/examples)
   - [With Table of contents](/docs/with-toc)
   - [Without Table of Contents](/docs/without-toc)
