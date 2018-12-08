@@ -1,4 +1,5 @@
 # Simple Makefile for running tests and building website
+.PHONY: docs
 
 docs: FORCE
 	@echo "Building docs..."
@@ -9,6 +10,6 @@ docs: FORCE
 	@echo "Done."
 
 serve: docs
-	@cd docs && python -m SimpleHTTPServer
+	@cd docs && static -debug
 
 FORCE:
