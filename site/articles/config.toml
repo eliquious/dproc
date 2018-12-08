@@ -1,6 +1,6 @@
 # hugo server --themesDir ...
 
-baseURL = "dproc"
+baseURL = ""
 title = "Hugo Book"
 theme = "book"
 themesDir = "../themes"
