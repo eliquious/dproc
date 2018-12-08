@@ -1,4 +1,4 @@
-baseurl = ""
+baseurl = "dproc"
 title = "dProc"
 theme = "hugo-coder"
 themesDir = "../themes"
