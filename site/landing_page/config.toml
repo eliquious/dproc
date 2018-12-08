@@ -1,4 +1,4 @@
-baseurl = "https://eliquious.github.io/dproc"
+baseurl = ""
 title = "dProc"
 theme = "hugo-coder"
 themesDir = "../themes"
