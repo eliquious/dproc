@@ -9,7 +9,6 @@ defaultcontentlanguage = "en"
 
 # Book configuration
 disablePathToLower = true
-
 relativeURLs = true
 
 # [permalinks]
