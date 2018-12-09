@@ -1,7 +1,7 @@
 # hugo server --themesDir ...
 
 baseURL = ""
-title = "Hugo Book"
+title = "dProc Articles"
 theme = "book"
 themesDir = "../themes"
 languagecode = "en"
