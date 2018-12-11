@@ -28,7 +28,7 @@ The `Engine` `context.Context` is passed in mainly for long running processes. H
 
 ### **Implementing Handlers**
 
-Implementing handlers is a relatively straightforward task. Afterall, only one method needs to be implemented. However, in reality, a `Message` and a `MessageType` are needed as well for it to be useful.
+Implementing handlers is a relatively straightforward task. After all, only one method needs to be implemented. However, in reality, a `Message` and a `MessageType` are needed as well for it to be useful.
 
 ```go
 // TypeFloat64
