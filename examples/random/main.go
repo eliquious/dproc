@@ -13,10 +13,11 @@ import (
 
 func main() {
 	log.SetOutput(os.Stdout)
-	ctx, cancel := context.WithCancel(context.Background())
+	// ctx, _ := context.WithCancel(context.Background())
+	ctx := context.Background()
 
 	var wg sync.WaitGroup
-	engine := dproc.NewEngine(ctx, cancel, dproc.ProcessList{
+	engine := dproc.NewEngine(ctx, dproc.ProcessList{
 		dproc.NewDefaultProcess(ctx, "Random Numbers", &RandomGenerator{time.Second * 5}, dproc.ProcessList{
 			dproc.NewDefaultProcess(ctx, "Random Logger", &RandomLogger{Ticker: time.NewTicker(time.Second)}, dproc.ProcessList{}),
 		}),
@@ -47,23 +48,18 @@ func (p *RandomGenerator) Handle(ctx context.Context, proc dproc.Process, msg dp
 	switch msg.Type {
 	default:
 		fmt.Println("Unknown message type: ", msg.Type)
+	case dproc.MessageTypeStop:
+		log.Printf("[%s] - Exiting...", proc.Name())
 	case dproc.MessageTypeStart:
 		log.Printf("[%s] - Starting...", proc.Name())
 
 		timer := time.NewTimer(p.Duration)
+		msg2 := dproc.Message{Forward: false, Type: TypeRandom, Value: RandomMessage{0.0}}
 		for {
 			select {
 			default:
-				proc.Children().Dispatch(dproc.Message{
-					Forward: false,
-					Type:    TypeRandom,
-					// Timestamp: time.Now().UTC(),
-					Value: RandomMessage{rand.Float64()},
-				})
-			case <-ctx.Done():
-				proc.SetState(dproc.StateKilled)
-				log.Printf("[%s] - Exiting...", proc.Name())
-				return
+				msg2.Value = RandomMessage{rand.Float64()}
+				proc.Children().Dispatch(msg2)
 			case <-timer.C:
 				proc.SetState(dproc.StateKilled)
 				log.Printf("[%s] - Exiting...", proc.Name())

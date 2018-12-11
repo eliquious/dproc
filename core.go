@@ -86,6 +86,11 @@ type DefaultProcess struct {
 	name     string
 }
 
+func (p *DefaultProcess) kill(msg Message) {
+	p.state = StateKilled
+	p.handler.Handle(p.ctx, p, msg)
+}
+
 // Start runs the process
 func (p *DefaultProcess) Start(wg *sync.WaitGroup) {
 	wg.Add(1)
@@ -101,10 +106,7 @@ func (p *DefaultProcess) Start(wg *sync.WaitGroup) {
 			case s := <-p.stateCh:
 				p.state = s
 			case <-p.ctx.Done():
-				msg := Message{Timestamp: time.Now().UTC(), Type: MessageTypeStop, Forward: true}
-				p.state = StateKilled
-				p.handler.Handle(p.ctx, p, msg)
-				p.Children().Dispatch(msg)
+				p.kill(Message{Type: MessageTypeStop, Forward: true})
 			case msg := <-p.inbox:
 				switch msg.Type {
 				case MessageTypeStart:
@@ -112,9 +114,7 @@ func (p *DefaultProcess) Start(wg *sync.WaitGroup) {
 					p.Children().Dispatch(msg)
 					p.handler.Handle(p.ctx, p, msg)
 				case MessageTypeStop:
-					p.state = StateKilled
-					p.handler.Handle(p.ctx, p, msg)
-					p.Children().Dispatch(msg)
+					p.kill(msg)
 				default:
 
 					// Process message if running
@@ -129,6 +129,7 @@ func (p *DefaultProcess) Start(wg *sync.WaitGroup) {
 				}
 			}
 		}
+		p.Children().Dispatch(Message{Type: MessageTypeStop, Forward: true})
 	}()
 }
 
@@ -204,7 +205,8 @@ func WithService(ctx context.Context, svc Service) context.Context {
 }
 
 // NewEngine creates a new engine
-func NewEngine(ctx context.Context, cancel context.CancelFunc, ps ProcessList) Engine {
+func NewEngine(pctx context.Context, ps ProcessList) Engine {
+	ctx, cancel := context.WithCancel(pctx)
 	return &engine{ctx, cancel, ps}
 }
 
