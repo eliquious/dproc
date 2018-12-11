@@ -52,4 +52,4 @@ pygmentscodefencesguesssyntax = true
 [[menu.main]]
     name = "Articles"
     weight = 2
-    url = "/articles/"
+    url = "/articles/docs/intro"
