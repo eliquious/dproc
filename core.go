@@ -6,10 +6,10 @@ import (
 	"time"
 )
 
-// MessageType is the message type
+// MessageType helps enumerate message types
 type MessageType string
 
-// Common message types
+// Built-in message types
 const (
 	MessageTypeStart MessageType = "START"
 	MessageTypeStop  MessageType = "STOP"
@@ -47,7 +47,6 @@ type Process interface {
 	SetState(State)
 	Start(*sync.WaitGroup)
 	Send(Message)
-	Inbox() <-chan Message
 	Children() ProcessList
 }
 
@@ -56,8 +55,8 @@ type ProcessList []Process
 
 // Dispatch dispatches a message to a list of processes
 func (p ProcessList) Dispatch(m Message) {
-	for i := 0; i < len(p); i++ {
-		p[i].Send(m)
+	for _, proc := range p {
+		proc.Send(m)
 	}
 }
 
@@ -99,33 +98,37 @@ func (p *DefaultProcess) Start(wg *sync.WaitGroup) {
 		for p.state != StateKilled {
 
 			select {
-			case <-p.ctx.Done():
-				p.SetState(StateKilled)
 			case s := <-p.stateCh:
 				p.state = s
+			case <-p.ctx.Done():
+				msg := Message{Timestamp: time.Now().UTC(), Type: MessageTypeStop, Forward: true}
+				p.state = StateKilled
+				p.handler.Handle(p.ctx, p, msg)
+				p.Children().Dispatch(msg)
 			case msg := <-p.inbox:
 				switch msg.Type {
 				case MessageTypeStart:
 					p.state = StateRunning
 					p.Children().Dispatch(msg)
+					p.handler.Handle(p.ctx, p, msg)
 				case MessageTypeStop:
 					p.state = StateKilled
 					p.handler.Handle(p.ctx, p, msg)
 					p.Children().Dispatch(msg)
-				}
+				default:
 
-				// Process message
-				if p.state == StateRunning {
-					p.handler.Handle(p.ctx, p, msg)
-				}
+					// Process message if running
+					if p.state == StateRunning {
+						p.handler.Handle(p.ctx, p, msg)
+					}
 
-				// Forward message
-				if msg.Forward && msg.Type != MessageTypeStart {
-					p.Children().Dispatch(msg)
+					// Forward message if required
+					if msg.Forward {
+						p.Children().Dispatch(msg)
+					}
 				}
 			}
 		}
-		p.Children().Dispatch(Message{Timestamp: time.Now(), Type: MessageTypeStop, Forward: true})
 	}()
 }
 
@@ -142,11 +145,6 @@ func (p *DefaultProcess) Name() string {
 // Send enqueues incoming messages and updates account information
 func (p *DefaultProcess) Send(msg Message) {
 	p.inbox <- msg
-}
-
-// Inbox returns the process queue
-func (p *DefaultProcess) Inbox() <-chan Message {
-	return p.inbox
 }
 
 // Children returns the process children

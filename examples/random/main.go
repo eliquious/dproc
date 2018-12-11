@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"os"
 	"sync"
-	// "os/signal"
 	"time"
 )
 
@@ -56,13 +55,15 @@ func (p *RandomGenerator) Handle(ctx context.Context, proc dproc.Process, msg dp
 			select {
 			default:
 				proc.Children().Dispatch(dproc.Message{
-					Forward:   false,
-					Type:      TypeRandom,
-					Timestamp: time.Now().UTC(),
-					Value:     RandomMessage{rand.Float64()},
+					Forward: false,
+					Type:    TypeRandom,
+					// Timestamp: time.Now().UTC(),
+					Value: RandomMessage{rand.Float64()},
 				})
 			case <-ctx.Done():
-				// fallthrough
+				proc.SetState(dproc.StateKilled)
+				log.Printf("[%s] - Exiting...", proc.Name())
+				return
 			case <-timer.C:
 				proc.SetState(dproc.StateKilled)
 				log.Printf("[%s] - Exiting...", proc.Name())
