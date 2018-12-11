@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Handlers | dProc Articles</title><link href="https://fonts.googleapis.com/css?family=Oxygen|Oxygen+Mono:300,400,700" rel=stylesheet><link rel=stylesheet href=https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css integrity="sha256-oSrCnRYXvHG31SBifqP2PM1uje7SJUyX0nTwO2RJV54=" crossorigin=anonymous><link rel=stylesheet href=../../book.min.9caf26ee2daca225930c0f85fd9eaa9f543aea51e1c0f8096e61e8a6706ae066.css></head><body><input type=checkbox style=display:none id=menu-control><main class="flex container"><aside class="book-menu fixed"><nav role=navigation><h2 class=book-brand><a href>dProc Articles</a></h2><ul><li><a href=../../docs/intro><strong>Introduction</strong></a></li><li><a href=../../docs/interfaces><strong>Interfaces and structs</strong></a><ul><li><a href=../../docs/messages>Messages</a></li><li><a href=../../docs/handlers>Handlers</a></li><li><a href=../../docs/processes>Processes</a></li><li><a href=../../docs/engine>Engine</a></li></ul></li><li><strong>Examples</strong><ul><li><a href=../../docs/examples/random>Random</a></li></ul></li></ul></nav></aside><div class=book-page><header class="align-center book-header"><label for=menu-control style=margin-right:24px><img src=../../svg/menu.svg alt=menu></label>
+<strong>Handlers</strong></header><article class=markdown><h2 id=handlers><strong>Handlers</strong></h2><p>Handlers handle incoming messages as well as send messages to child processes. The interface only has one method.</p><pre><code class=language-go>type Handler interface {
+    Handle(ctx context.Context, proc Process, msg Message)
+}
+</code></pre><p>The <code>Engine</code> <code>context.Context</code> is passed in mainly for long running processes. However, <code>ctx.Done()</code> is monitored between function calls regardless. The <code>Process</code> is included as the <code>Handler</code> can modify the process <code>State</code> and is needed to dispatch messages.</p><h3 id=implementing-handlers><strong>Implementing Handlers</strong></h3><p>Implementing handlers is a relatively straightforward task. Afterall, only one method needs to be implemented. However, in reality, a <code>Message</code> and a <code>MessageType</code> are needed as well for it to be useful.</p><pre><code class=language-go>// TypeFloat64
+const TypeFloat64 = dproc.MessageType(&quot;Float64&quot;)
+
+// SimpleHandler handles dproc.MessageTypeStart, dproc.MessageTypeStop and TypeFloat64.
+type SimpleHandler struct {
+}
+
+// Handle handles each individual messages. The message value for TypeFloat64 is a float64.
+func (h *SimpleHandler) Handle(ctx context.Context, proc dproc.Process, msg dproc.Message) {
+	switch msg.Type {
+	default:
+
+		// Log any unknown message types.
+		log.Printf(&quot;[%s] - Unknown message type: %s&quot;, proc.Name(), msg.Type)
+
+	case dproc.MessageTypeStart:
+
+		// Log a starting message. Generally, initialization 
+		// code executes here.
+		log.Printf(&quot;[%s] - Starting...&quot;, proc.Name())
+
+	case dproc.MessageTypeStop:
+
+		// Log the last message for the handler. The default process will 
+		// not call the handler for any message after this.
+		log.Printf(&quot;[%s] - Exiting...&quot;, proc.Name())
+
+	case TypeFloat64:
+
+		// Type cast and log the message value
+		value := msg.Value.(float64)
+		log.Printf(&quot;[%s] - Message: %f&quot;, proc.Name(), value)
+
+		// Dispatch sends the square of the value to any child processes.
+		proc.Children().Dispatch(dproc.Message{
+			Type:    TypeFloat64,
+			Value: value * value,
+		})
+	}
+}
+</code></pre><p>This example is somewhat contrived as a <code>Process</code> will most likely not be used simply to square a value. However, it outlines how to handle message types and send messages.</p></article></div><aside class="book-toc fixed"><nav id=TableOfContents><ul><li><ul><li><a href=#handlers><strong>Handlers</strong></a><ul><li><a href=#implementing-handlers><strong>Implementing Handlers</strong></a></li></ul></li></ul></li></ul></nav></aside></main></body></html>
