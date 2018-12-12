@@ -8,8 +8,8 @@ headless: true
   - [Handlers](/docs/handlers)
   - [Processes](/docs/processes)
   - [Engine](/docs/engine)
-- **Examples**
-  - [Random](/docs/examples/random)
+<!-- - **Examples** -->
+  <!-- - [Random](/docs/examples/random) -->
   <!-- - [With Table of contents](/docs/with-toc) -->
   <!-- - [Without Table of Contents](/docs/without-toc) -->
 
